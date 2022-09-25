@@ -1,6 +1,10 @@
 from solcx import compile_standard, install_solc
 import json
+import os
 from web3 import Web3
+from dotenv import load_dotenv
+
+load_dotenv()
 
 with open("./SimpleStorage.sol", "r") as file:
     simple_storage_file = file.read()
@@ -38,7 +42,7 @@ abi = compiled_sol["contracts"]["SimpleStorage.sol"]["SimpleStorage"]["abi"]
 w3 = Web3(Web3.HTTPProvider("HTTP://0.0.0.0:8545"))
 chain_id = 1337
 my_address = "0xd45D4f78aeBAA5c9254dba282ac42c51DE21C09A"
-private_key = "0x755fc663b45ad7d73e78983e2e830f817de7d87c54938c9278021e6f6a5693e3"
+private_key = os.getenv("PRIVATE_KEY")
 
 # Create the contract in python
 SimpleStorage = w3.eth.contract(abi=abi, bytecode=bytecode)
@@ -57,4 +61,41 @@ transaction = SimpleStorage.constructor().buildTransaction(
         "nonce": nonce,
     }
 )
-print(transaction)
+
+signed_txn = w3.eth.account.sign_transaction(transaction, private_key=private_key)
+
+# Send this signed transaction
+print("Deploying contract...")
+tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+print("Deployed!")
+
+# Working with the contract
+# Contract Address
+# Contract abi
+simple_storage = w3.eth.contract(address=tx_receipt.contractAddress, abi=abi)
+# Call -> Simulate making the call and getting a return value
+# Transact -> Actually make a state change
+
+# Initial value of favorite number
+print(simple_storage.functions.retrieve().call())
+print("Updating Contract...")
+store_transaction = simple_storage.functions.store(15).buildTransaction(
+    {
+        "gasPrice": w3.eth.gas_price,
+        "chainId": chain_id,
+        "from": my_address,
+        "nonce": nonce + 1,
+    }
+)
+
+signed_store_txn = w3.eth.account.sign_transaction(
+    store_transaction, private_key=private_key
+)
+send_store_tx = transaction_hash = w3.eth.send_raw_transaction(
+    signed_store_txn.rawTransaction
+)
+tx_receipt = w3.eth.wait_for_transaction_receipt(send_store_tx)
+print("Updated!")
+
+print(simple_storage.functions.retrieve().call())
